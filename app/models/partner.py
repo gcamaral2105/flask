@@ -1,96 +1,74 @@
+from __future__ import annotations
+
 from app.extensions import db
 from app.lib import BaseModel
 from typing import Optional, Dict, Any, List
-from enum import Enum
-
-
-class EntityTypeEnum(str, Enum):
-    """Enumeration for partner entity types."""
-    HALCO = 'halco_buyer'
-    OFFTAKER = 'offtaker'
 
 
 class PartnerEntity(BaseModel):
     """
     Partner Entity Model
     
-    Represents one of the buyer's entities in the bauxite supply chain.
-    An entity can be either a Halco buyer or an offtaker, and can have
+    Represents a buyer entity in the bauxite supply chain.
+    An entity can be either a Halco buyer or not, and can have
     multiple partners (clients) associated with it.
     """
 
     __tablename__ = 'partner_entities'
 
     id: int = db.Column(db.Integer, primary_key=True)
+    
+    # ---------------------------------------------------------------------
+    # Core fields
+    # ---------------------------------------------------------------------
     name: str = db.Column(
         db.String(100), 
         nullable=False,
-        comment="Name of the partner entity"
+        comment="Name of the entity"
     )
+    
     code: str = db.Column(
         db.String(20), 
         unique=True, 
         nullable=False,
-        comment="Unique code identifier for the entity"
+        comment="Code of the entity"
     )
+    
     description: Optional[str] = db.Column(
         db.Text,
-        comment="Detailed description of the entity"
+        comment="Description"
     )
 
-    # Entity type classification
-    entity_type: EntityTypeEnum = db.Column(
-        db.Enum(EntityTypeEnum, name='entity_type_enum'),
-        default=EntityTypeEnum.OFFTAKER,
+    is_halco_buyer: bool = db.Column(
+        db.Boolean,
+        default=False,
         nullable=False,
-        comment="Type of entity (Halco buyer or offtaker)"
+        comment="If is Halco Buyer or not"
     )
 
+    # ---------------------------------------------------------------------
     # Relationships
+    # ---------------------------------------------------------------------
     partners = db.relationship(
         'Partner', 
-        backref='entity', 
+        back_populates='entity', 
         lazy='select', 
         cascade='all, delete-orphan'
     )
     
+    # ---------------------------------------------------------------------
     # Table constraints and indexes
+    # ---------------------------------------------------------------------
     __table_args__ = (
-        db.Index('idx_entity_type', 'entity_type'),
         db.Index('idx_entity_code', 'code'),
+        db.Index('idx_entity_halco', 'is_halco_buyer'),
     )
 
-    def __repr__(self) -> str:
-        return f'<PartnerEntity {self.name} ({self.entity_type.value})>'
-    
-    def to_dict(self, include_partners: bool = False, include_audit: bool = True) -> Dict[str, Any]:
-        """
-        Convert to dictionary with optional partner inclusion.
-        
-        Args:
-            include_partners: Whether to include related partners
-            include_audit: Whether to include audit fields
-            
-        Returns:
-            Dictionary representation of the entity
-        """
-        result = super().to_dict(include_audit=include_audit)
-        result['entity_type'] = self.entity_type.value
-        
-        if include_partners:
-            result['partners'] = [p.to_dict(include_audit=include_audit) for p in self.partners]
-        else:
-            result['partners_count'] = len(self.partners)
-            
-        return result
-    
+    # ---------------------------------------------------------------------
+    # Validation and serialization
+    # ---------------------------------------------------------------------
     def validate(self) -> List[str]:
-        """
-        Validate the partner entity data.
-        
-        Returns:
-            List of validation error messages (empty if valid)
-        """
+        """Validate the partner entity data."""
         errors = []
         
         if not self.name or not self.name.strip():
@@ -105,11 +83,22 @@ class PartnerEntity(BaseModel):
         if len(self.code) > 20:
             errors.append("Entity code must be 20 characters or less")
             
-        # Code should be alphanumeric and uppercase
-        if self.code and not self.code.replace('_', '').replace('-', '').isalnum():
-            errors.append("Entity code should contain only alphanumeric characters, hyphens, and underscores")
-            
         return errors
+
+    def __repr__(self) -> str:
+        buyer_type = "Halco Buyer" if self.is_halco_buyer else "Offtaker"
+        return f'<PartnerEntity {self.name} ({buyer_type})>'
+    
+    def to_dict(self, include_partners: bool = False, include_audit: bool = True) -> Dict[str, Any]:
+        """Convert to dictionary with optional partner inclusion."""
+        result = super().to_dict(include_audit=include_audit)
+        
+        if include_partners:
+            result['partners'] = [p.to_dict(include_audit=include_audit) for p in self.partners]
+        else:
+            result['partners_count'] = len(self.partners)
+            
+        return result
 
 
 class Partner(BaseModel):
@@ -117,88 +106,65 @@ class Partner(BaseModel):
     Partner Model
     
     Represents a specific client within a partner entity.
-    Each partner belongs to an entity and has specific volume requirements
-    and distribution parameters.
+    Each partner belongs to an entity and has minimum contractual tonnage.
     """
 
     __tablename__ = 'partners'
 
     id: int = db.Column(db.Integer, primary_key=True)
+    
+    # ---------------------------------------------------------------------
+    # Core fields
+    # ---------------------------------------------------------------------
     name: str = db.Column(
         db.String(100), 
         nullable=False,
-        comment="Name of the partner/client"
+        comment="Name of the partner"
     )
+    
     code: str = db.Column(
         db.String(20), 
         unique=True, 
         nullable=False,
-        comment="Unique code identifier for the partner"
+        comment="Code of the partner"
     )
+    
     description: Optional[str] = db.Column(
         db.Text,
-        comment="Detailed description of the partner"
+        comment="Description"
     )
 
+    minimum_contractual_tonnage: Optional[int] = db.Column(
+        db.Integer,
+        comment="Minimum contractual tonnage (flexible, can change every contractual year)"
+    )
+
+    # ---------------------------------------------------------------------
     # Foreign key to parent entity
+    # ---------------------------------------------------------------------
     entity_id: int = db.Column(
         db.Integer, 
         db.ForeignKey('partner_entities.id', ondelete='CASCADE'), 
         nullable=False,
-        comment="ID of the parent entity"
+        comment="Which entity belongs this partner"
     )
 
-    # Business parameters
-    minimum_volume: Optional[int] = db.Column(
-        db.Integer,
-        comment="Minimum volume requirement in metric tons (3-month period)"
-    )
+    entity = db.relationship('PartnerEntity', back_populates='partners')
     
+    # ---------------------------------------------------------------------
     # Table constraints and indexes
+    # ---------------------------------------------------------------------
     __table_args__ = (
         db.Index('idx_partner_entity', 'entity_id'),
         db.Index('idx_partner_code', 'code'),
-        db.CheckConstraint(
-            'minimum_volume >= 0',
-            name='positive_minimum_volume'
-        ),
+        db.CheckConstraint('minimum_contractual_tonnage >= 0', name='ck_partner_tonnage_nonneg'),
     )
 
-    def __repr__(self) -> str:
-        entity_name = self.entity.name if self.entity else 'Unknown'
-        status = "Active" if self.is_active else "Inactive"
-        return f'<Partner {self.name} ({entity_name}) - {status}>'
-    
-    def to_dict(self, include_entity: bool = True, include_audit: bool = True) -> Dict[str, Any]:
-        """
-        Convert to dictionary with optional entity details.
-        
-        Args:
-            include_entity: Whether to include parent entity details
-            include_audit: Whether to include audit fields
-            
-        Returns:
-            Dictionary representation of the partner
-        """
-        result = super().to_dict(include_audit=include_audit)
-        
-        if include_entity and self.entity:
-            result['entity_name'] = self.entity.name
-            result['entity_type'] = self.entity.entity_type.value
-        
-        # Convert volume to float for JSON serialization
-        if self.minimum_volume is not None:
-            result['minimum_volume'] = float(self.minimum_volume)
-            
-        return result
-    
+    # ---------------------------------------------------------------------
+    # Validation and serialization
+    # ---------------------------------------------------------------------
     def validate(self) -> List[str]:
-        """
-        Validate the partner data.
-        
-        Returns:
-            List of validation error messages (empty if valid)
-        """
+        """Validate the partner data."""
         errors = []
         
         if not self.name or not self.name.strip():
@@ -216,93 +182,22 @@ class Partner(BaseModel):
         if len(self.code) > 20:
             errors.append("Partner code must be 20 characters or less")
             
-        # Volume validation
-        if self.minimum_volume is not None and self.minimum_volume < 0:
-            errors.append("Minimum volume cannot be negative")
-            
-        # Code should be alphanumeric and uppercase
-        if self.code and not self.code.replace('_', '').replace('-', '').isalnum():
-            errors.append("Partner code should contain only alphanumeric characters, hyphens, and underscores")
+        if self.minimum_contractual_tonnage is not None and self.minimum_contractual_tonnage < 0:
+            errors.append("Minimum contractual tonnage cannot be negative")
             
         return errors
+
+    def __repr__(self) -> str:
+        entity_name = self.entity.name if self.entity else 'Unknown'
+        return f'<Partner {self.name} (Entity: {entity_name})>'
     
-    def get_volume_mt_per_month(self) -> Optional[float]:
-        """
-        Calculate average monthly volume requirement.
+    def to_dict(self, include_entity: bool = True, include_audit: bool = True) -> Dict[str, Any]:
+        """Convert to dictionary with optional entity details."""
+        result = super().to_dict(include_audit=include_audit)
         
-        Returns:
-            Average monthly volume in metric tons, or None if not set
-        """
-        if self.minimum_volume is None:
-            return None
-        return self.minimum_volume / 3.0
-    
-    def activate(self, user_id: Optional[int] = None) -> None:
-        """
-        Activate the partner.
-        
-        Args:
-            user_id: ID of the user performing the activation
-        """
-        self.is_active = True
-        self.update_audit_fields(user_id)
-    
-    def deactivate(self, user_id: Optional[int] = None) -> None:
-        """
-        Deactivate the partner.
-        
-        Args:
-            user_id: ID of the user performing the deactivation
-        """
-        self.is_active = False
-        self.update_audit_fields(user_id)
-    
-    def toggle_status(self, user_id: Optional[int] = None) -> bool:
-        """
-        Toggle the partner's active status.
-        
-        Args:
-            user_id: ID of the user performing the toggle
+        if include_entity and self.entity:
+            result['entity_name'] = self.entity.name
+            result['entity_code'] = self.entity.code
+            result['is_halco_buyer'] = self.entity.is_halco_buyer
             
-        Returns:
-            New active status (True if now active, False if now inactive)
-        """
-        self.is_active = not self.is_active
-        self.update_audit_fields(user_id)
-        return self.is_active
-    
-    @classmethod
-    def get_active_partners(cls):
-        """
-        Get all active partners.
-        
-        Returns:
-            Query object for active partners
-        """
-        return cls.query.filter(cls.is_active == True)
-    
-    @classmethod
-    def get_inactive_partners(cls):
-        """
-        Get all inactive partners.
-        
-        Returns:
-            Query object for inactive partners
-        """
-        return cls.query.filter(cls.is_active == False)
-    
-    @classmethod
-    def get_active_partners_by_entity(cls, entity_id: int):
-        """
-        Get all active partners for a specific entity.
-        
-        Args:
-            entity_id: ID of the entity
-            
-        Returns:
-            Query object for active partners of the entity
-        """
-        return cls.query.filter(
-            cls.entity_id == entity_id,
-            cls.is_active == True
-        )
+        return result
