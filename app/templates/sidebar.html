@@ -1,0 +1,38 @@
+   
+
+<div class="d-flex">
+    <div class="sidebar d-flex flex-column p-2" id="sidebar">
+    <button class="btn btn-outline-secondary toggle-btn" id="toggleSidebar">
+        <i class="bi bi-chevron-left"></i>
+    </button>
+
+    <a href="/" class="nav-link"><i class="bi bi-house-fill me-1"></i> <span>Home</span></a>
+    <a href="#" class="nav-link"><i class="fas fa-ship me-1"></i> <span>Schedule</span></a>
+    {#<a href="#" class="nav-link"><i class="bi bi-folder"></i> <span>Browse</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-droplet"></i> <span>OneLake</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-gift"></i> <span>Apps</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-trophy"></i> <span>Metrics</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-search"></i> <span>Monitor</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-book"></i> <span>Learn</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-lightning"></i> <span>Real-Time</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-briefcase"></i> <span>Workloads</span></a>#}
+
+    <div class="border-top"><span></span></div>
+    <a href="/settings/" class="nav-link"><i class="bi bi-gear-fill me-1"></i> <span>Settings</span></a>
+    {#<a href="#" class="nav-link"><span>Juruti Port Line-Up</span></a>
+    <a href="#" class="nav-link"><i class="bi bi-three-dots"></i> <span>More</span></a>
+    </div>#}
+
+</div>
+
+<script>
+    const toggleBtn = document.getElementById('toggleSidebar');
+    const sidebar = document.getElementById('sidebar');
+    const icon = toggleBtn.querySelector('i');
+
+    toggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    icon.classList.toggle('bi-chevron-left');
+    icon.classList.toggle('bi-chevron-right');
+    });
+</script>

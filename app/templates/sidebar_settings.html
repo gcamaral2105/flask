@@ -1,0 +1,61 @@
+<div class="d-flex">
+    <div class="sidebar d-flex flex-column p-2" id="sidebar">
+        <button class="btn btn-outline-secondary toggle-btn" id="toggleSidebar">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+
+        <!-- Dashboard -->
+        <a href="{{ url_for('settings_bp.dashboard') }}" class="nav-link">
+            <i class="fas fa-tachometer-alt me-1"></i> 
+            <span>Dashboard</span>
+        </a>
+
+        <!-- Product Management Section -->
+        <a href="{{ url_for('settings_bp.categories_list') }}" class="nav-link">
+            <i class="fas fa-tags me-1"></i> 
+            <span>Categories</span>
+        </a>
+        
+        <a href="{{ url_for('settings_bp.mines_list') }}" class="nav-link">
+            <i class="fas fa-mountain me-1"></i> 
+            <span>Mines</span>
+        </a>
+        
+        <a href="{{ url_for('settings_bp.subtypes_list') }}" class="nav-link">
+            <i class="fas fa-sitemap me-1"></i> 
+            <span>Subtypes</span>
+        </a>
+
+        <!-- System Section -->
+        <div class="border-top"><span></span></div>
+        
+        <a href="{{ url_for('main_bp.home') }}" class="nav-link">
+            <i class="fas fa-home me-1"></i> 
+            <span>Back to Main</span>
+        </a>
+        
+        <a href="{{ url_for('product_bp.dashboard') }}" class="nav-link">
+            <i class="fas fa-cube me-1"></i> 
+            <span>Products Module</span>
+        </a>
+    </div>
+
+    <main>
+        <div class="flex-grow-1 p-3">
+            <!-- O conteúdo será inserido aqui pelo template base -->
+        </div>
+    </main>
+</div>
+
+<script>
+    const toggleBtn = document.getElementById('toggleSidebar');
+    const sidebar = document.getElementById('sidebar');
+    const icon = toggleBtn.querySelector('i');
+
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        icon.classList.toggle('bi-chevron-left');
+        icon.classList.toggle('bi-chevron-right');
+    });
+</script>
+

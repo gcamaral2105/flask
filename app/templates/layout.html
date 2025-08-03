@@ -1,0 +1,14 @@
+{% include 'head.html' %}
+
+<body>
+
+    {% include 'header.html' %}
+
+    {% include 'sidebar.html' %}
+
+    <main>
+    <div class="flex-grow-1 p-3">
+        {% block content %}{% endblock %}
+    </div>
+    </main>
+</body>
