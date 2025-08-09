@@ -5,8 +5,21 @@ from typing import Optional, Dict, Any, List
 
 from app.extensions import db
 from app.lib import BaseModel
-from sqlalchemy import CheckConstraint, UniqueConstraint
-
+import sqlalchemy as sa
+from sqlalchemy import (
+    CheckConstraint,
+    UniqueConstraint,
+    Numeric,
+    SmallInteger,
+    Index,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+    select,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 
 class Mine(BaseModel):
     """
@@ -18,27 +31,27 @@ class Mine(BaseModel):
 
     __tablename__ = "mines"
 
-    id: int = db.Column(db.Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # ---------------------------------------------------------------------
     # Core identifiers
     # ---------------------------------------------------------------------
-    name: str = db.Column(
-        db.String(200),
+    name: Mapped[str] = mapped_column(
+        String(200),
         nullable=False,
         unique=True,
         comment="Mine name"
     )
 
-    code: Optional[str] = db.Column(
-        db.String(50),
+    code: Mapped[Optional[str]] = mapped_column(
+        String(50),
         unique=True,
         nullable=True,
         comment="Mine Code (if not provided, will use name as main recognition)"
     )
 
-    country: str = db.Column(
-        db.String(100),
+    country: Mapped[str] = mapped_column(
+        String(100),
         nullable=False,
         comment="Country of the mine"
     )
@@ -46,46 +59,46 @@ class Mine(BaseModel):
     # ---------------------------------------------------------------------
     # Port information
     # ---------------------------------------------------------------------
-    port_location: str = db.Column(
-        db.String(150),
+    port_location: Mapped[str] = mapped_column(
+        String(150),
         nullable=False,
         comment="Port Location"
     )
 
-    port_latitude: Decimal = db.Column(
-        db.Numeric(9, 6),
+    port_latitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
         nullable=False,
         comment="Port Latitude"
     )
 
-    port_longitude: Decimal = db.Column(
-        db.Numeric(9, 6),
+    port_longitude: Mapped[Decimal] = mapped_column(
+        Numeric(9, 6),
         nullable=False,
         comment="Port Longitude"
     )
 
-    port_berths: int = db.Column(
-        db.SmallInteger,
+    port_berths: Mapped[int] = mapped_column(
+        SmallInteger,
         nullable=False,
-        server_default=1,
+        default=1,
         comment="Port berths"
     )
 
-    port_shiploaders: int = db.Column(
-        db.SmallInteger,
+    shiploaders: Mapped[int] = mapped_column(
+        SmallInteger,
         nullable=False,
-        server_default=1,
+        default=1,
         comment="Port shiploaders"
     )
 
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    products = db.relationship(
+    products = relationship(
         "Product",
         back_populates="mine",
         cascade="all, delete-orphan",
-        lazy="dynamic"
+        lazy="selectin"
     )
 
     # ---------------------------------------------------------------------
@@ -96,8 +109,7 @@ class Mine(BaseModel):
         CheckConstraint("port_longitude BETWEEN -180 AND 180", name="ck_mines_lon_range"),
         CheckConstraint("port_berths >= 0", name="ck_mines_berths_nonneg"),
         CheckConstraint("port_shiploaders >= 0", name="ck_mines_shiploaders_nonneg"),
-        db.Index('idx_mine_name', 'name'),
-        db.Index('idx_mine_country', 'country'),
+        Index('idx_mine_country', 'country'),
     )
 
     # ---------------------------------------------------------------------
@@ -153,10 +165,10 @@ class Mine(BaseModel):
 
         if include_products:
             result["products"] = [
-                pr.to_dict(include_audit=include_audit) for pr in self.products.all()
+                pr.to_dict(include_audit=include_audit) for pr in self.products
             ]
         else:
-            result["products_count"] = self.products.count()
+            result["products_count"] = self.products_count
 
         return result
 
@@ -172,40 +184,40 @@ class Product(BaseModel):
 
     __tablename__ = "products"
 
-    id: int = db.Column(db.Integer, primary_key=True)
+    id:Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # ---------------------------------------------------------------------
     # Core identifiers
     # ---------------------------------------------------------------------
-    name: str = db.Column(
-        db.String(100),
+    name: Mapped[str] = mapped_column(
+        String(100),
         nullable=False,
         comment="Name of the product"
     )
 
-    code: Optional[str] = db.Column(
-        db.String(50),
+    code: Mapped[Optional[str]] = mapped_column(
+        String(50),
         unique=True,
         nullable=True,
         comment="Code of the product (globally unique if provided)"
     )
 
-    description: Optional[str] = db.Column(
-        db.Text,
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
         comment="Description"
     )
 
     # ---------------------------------------------------------------------
     # Foreign key to Mine
     # ---------------------------------------------------------------------
-    mine_id: int = db.Column(
-        db.Integer,
-        db.ForeignKey("mines.id", ondelete="CASCADE"),
+    mine_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("mines.id", ondelete="CASCADE"),
         nullable=False,
         comment="Mine related to the product"
     )
 
-    mine = db.relationship("Mine", back_populates="products")
+    mine = relationship("Mine", back_populates="products")
 
     # ---------------------------------------------------------------------
     # Table-level constraints and indexes
@@ -214,8 +226,8 @@ class Product(BaseModel):
         # Products can have same name but different mines (no unique constraint on name alone)
         # Only code needs to be globally unique (handled by unique=True on code column)
         UniqueConstraint('mine_id', 'name', name='uq_product_mine_name'),
-        db.Index('idx_product_mine', 'mine_id'),
-        db.Index('idx_product_name', 'name'),
+        Index('idx_product_mine', 'mine_id'),
+        Index('idx_product_name', 'name'),
     )
 
     # ---------------------------------------------------------------------
@@ -234,8 +246,9 @@ class Product(BaseModel):
         return errors
 
     def __repr__(self) -> str:
-        mine_identifier = self.mine.get_main_identifier() if self.mine else 'Unknown'
-        product_identifier = self.code if self.code else self.name
+        product_identifier = self.code or self.name
+        mine_label = getattr(self, "mine", None)
+        mine_identifier = mine_label.get_main_identifier() if mine_label else self.mine_id
         return f"<Product {product_identifier!r} (Mine: {mine_identifier})>"
 
     def to_dict(self, *, include_mine: bool = True, include_audit: bool = True) -> Dict[str, Any]:
@@ -252,3 +265,11 @@ class Product(BaseModel):
             }
 
         return result
+    
+Mine.products_count = column_property(
+    select(func.count(Product.id))
+    .where(Product.mine_id == Mine.id)
+    .correlate_except(Product)
+    .scalar_subquery()
+)
+
