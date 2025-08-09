@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.extensions import db
 from app.lib import BaseModel
 from typing import Optional, Dict, Any, List
+from sqlalchemy import func
 
 
 class PartnerEntity(BaseModel):
@@ -52,15 +53,15 @@ class PartnerEntity(BaseModel):
     partners = db.relationship(
         'Partner', 
         back_populates='entity', 
-        lazy='select', 
-        cascade='all, delete-orphan'
+        lazy='selectin', 
+        cascade='all, delete-orphan',
+        passive_deletes=True
     )
     
     # ---------------------------------------------------------------------
     # Table constraints and indexes
     # ---------------------------------------------------------------------
     __table_args__ = (
-        db.Index('idx_entity_code', 'code'),
         db.Index('idx_entity_halco', 'is_halco_buyer'),
     )
 
@@ -92,11 +93,10 @@ class PartnerEntity(BaseModel):
     def to_dict(self, include_partners: bool = False, include_audit: bool = True) -> Dict[str, Any]:
         """Convert to dictionary with optional partner inclusion."""
         result = super().to_dict(include_audit=include_audit)
+        result['partners_count'] = self.partners_count
         
         if include_partners:
             result['partners'] = [p.to_dict(include_audit=include_audit) for p in self.partners]
-        else:
-            result['partners_count'] = len(self.partners)
             
         return result
 
@@ -149,14 +149,13 @@ class Partner(BaseModel):
         comment="Which entity belongs this partner"
     )
 
-    entity = db.relationship('PartnerEntity', back_populates='partners')
+    entity = db.relationship('PartnerEntity', back_populates='partners', lazy='selectin')
     
     # ---------------------------------------------------------------------
     # Table constraints and indexes
     # ---------------------------------------------------------------------
     __table_args__ = (
         db.Index('idx_partner_entity', 'entity_id'),
-        db.Index('idx_partner_code', 'code'),
         db.CheckConstraint('minimum_contractual_tonnage >= 0', name='ck_partner_tonnage_nonneg'),
     )
 
@@ -201,3 +200,11 @@ class Partner(BaseModel):
             result['is_halco_buyer'] = self.entity.is_halco_buyer
             
         return result
+    
+PartnerEntity.partners_count = db.column_property(
+    db.select(func.count(Partner.id))
+    .where(Partner.entity_id == PartnerEntity.id)
+    .correlate_except(Partner)
+    .scalar_subquery()
+)
+
