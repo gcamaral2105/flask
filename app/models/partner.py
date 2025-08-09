@@ -3,7 +3,19 @@ from __future__ import annotations
 from app.extensions import db
 from app.lib import BaseModel
 from typing import Optional, Dict, Any, List
-from sqlalchemy import func
+import sqlalchemy as sa
+from sqlalchemy import (
+    CheckConstraint,
+    UniqueConstraint,
+    Boolean,
+    Index,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 
 
 class PartnerEntity(BaseModel):
@@ -17,31 +29,31 @@ class PartnerEntity(BaseModel):
 
     __tablename__ = 'partner_entities'
 
-    id: int = db.Column(db.Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     
     # ---------------------------------------------------------------------
     # Core fields
     # ---------------------------------------------------------------------
-    name: str = db.Column(
-        db.String(100), 
+    name: Mapped[str] = mapped_column(
+        String(100), 
         nullable=False,
         comment="Name of the entity"
     )
     
-    code: str = db.Column(
-        db.String(20), 
+    code: Mapped[str] = mapped_column(
+        String(20), 
         unique=True, 
         nullable=False,
         comment="Code of the entity"
     )
     
-    description: Optional[str] = db.Column(
-        db.Text,
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
         comment="Description"
     )
 
-    is_halco_buyer: bool = db.Column(
-        db.Boolean,
+    is_halco_buyer: Mapped[bool] = mapped_column(
+        Boolean,
         default=False,
         nullable=False,
         comment="If is Halco Buyer or not"
@@ -50,7 +62,7 @@ class PartnerEntity(BaseModel):
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    partners = db.relationship(
+    partners = relationship(
         'Partner', 
         back_populates='entity', 
         lazy='selectin', 
@@ -62,7 +74,7 @@ class PartnerEntity(BaseModel):
     # Table constraints and indexes
     # ---------------------------------------------------------------------
     __table_args__ = (
-        db.Index('idx_entity_halco', 'is_halco_buyer'),
+        Index('idx_entity_halco', 'is_halco_buyer'),
     )
 
     # ---------------------------------------------------------------------
@@ -111,52 +123,56 @@ class Partner(BaseModel):
 
     __tablename__ = 'partners'
 
-    id: int = db.Column(db.Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     
     # ---------------------------------------------------------------------
     # Core fields
     # ---------------------------------------------------------------------
-    name: str = db.Column(
-        db.String(100), 
+    name: Mapped[str] = mapped_column(
+        String(100), 
         nullable=False,
         comment="Name of the partner"
     )
     
-    code: str = db.Column(
-        db.String(20), 
+    code: Mapped[str] = mapped_column(
+        String(20), 
         unique=True, 
         nullable=False,
         comment="Code of the partner"
     )
     
-    description: Optional[str] = db.Column(
-        db.Text,
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
         comment="Description"
     )
 
-    minimum_contractual_tonnage: Optional[int] = db.Column(
-        db.Integer,
+    minimum_contractual_tonnage: Mapped[Optional[int]] = mapped_column(
+        Integer,
         comment="Minimum contractual tonnage (flexible, can change every contractual year)"
     )
 
     # ---------------------------------------------------------------------
     # Foreign key to parent entity
     # ---------------------------------------------------------------------
-    entity_id: int = db.Column(
-        db.Integer, 
-        db.ForeignKey('partner_entities.id', ondelete='CASCADE'), 
+    entity_id: Mapped[int] = mapped_column(
+        Integer, 
+        ForeignKey('partner_entities.id', ondelete='CASCADE'), 
         nullable=False,
         comment="Which entity belongs this partner"
     )
 
-    entity = db.relationship('PartnerEntity', back_populates='partners', lazy='selectin')
+    entity = relationship('PartnerEntity', back_populates='partners', lazy='selectin')
     
     # ---------------------------------------------------------------------
     # Table constraints and indexes
     # ---------------------------------------------------------------------
     __table_args__ = (
-        db.Index('idx_partner_entity', 'entity_id'),
-        db.CheckConstraint('minimum_contractual_tonnage >= 0', name='ck_partner_tonnage_nonneg'),
+        Index('idx_partner_entity', 'entity_id'),
+        UniqueConstraint("entity_id", "name", name="uq_partner_entity_name"),
+        CheckConstraint(
+            "minimum_contractual_tonnage IS NULL OR minimum_contractual_tonnage >= 0",
+            name="ck_partner_tonnage_nonneg",
+        ),
     )
 
     # ---------------------------------------------------------------------
@@ -187,7 +203,7 @@ class Partner(BaseModel):
         return errors
 
     def __repr__(self) -> str:
-        entity_name = self.entity.name if self.entity else 'Unknown'
+        entity_name = getattr(self.entity, "name", None)
         return f'<Partner {self.name} (Entity: {entity_name})>'
     
     def to_dict(self, include_entity: bool = True, include_audit: bool = True) -> Dict[str, Any]:
@@ -201,8 +217,8 @@ class Partner(BaseModel):
             
         return result
     
-PartnerEntity.partners_count = db.column_property(
-    db.select(func.count(Partner.id))
+PartnerEntity.partners_count = db.olumn_property(
+    sa.select(func.count(Partner.id))
     .where(Partner.entity_id == PartnerEntity.id)
     .correlate_except(Partner)
     .scalar_subquery()
