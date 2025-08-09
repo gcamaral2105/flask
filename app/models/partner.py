@@ -217,10 +217,11 @@ class Partner(BaseModel):
             
         return result
     
-PartnerEntity.partners_count = db.olumn_property(
+PartnerEntity.partners_count = column_property(
     sa.select(func.count(Partner.id))
     .where(Partner.entity_id == PartnerEntity.id)
     .correlate_except(Partner)
     .scalar_subquery()
 )
+
 
