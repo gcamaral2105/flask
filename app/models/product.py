@@ -26,6 +26,7 @@ class Mine(BaseModel):
     name: str = db.Column(
         db.String(200),
         nullable=False,
+        unique=True,
         comment="Mine name"
     )
 
@@ -66,14 +67,14 @@ class Mine(BaseModel):
     port_berths: int = db.Column(
         db.SmallInteger,
         nullable=False,
-        default=1,
+        server_default=1,
         comment="Port berths"
     )
 
     port_shiploaders: int = db.Column(
         db.SmallInteger,
         nullable=False,
-        default=1,
+        server_default=1,
         comment="Port shiploaders"
     )
 
@@ -95,7 +96,6 @@ class Mine(BaseModel):
         CheckConstraint("port_longitude BETWEEN -180 AND 180", name="ck_mines_lon_range"),
         CheckConstraint("port_berths >= 0", name="ck_mines_berths_nonneg"),
         CheckConstraint("port_shiploaders >= 0", name="ck_mines_shiploaders_nonneg"),
-        db.Index('idx_mine_code', 'code'),
         db.Index('idx_mine_name', 'name'),
         db.Index('idx_mine_country', 'country'),
     )
@@ -128,10 +128,10 @@ class Mine(BaseModel):
             errors.append("Port location is required")
 
         # Validate coordinates
-        if not (-90 <= self.port_latitude <= 90):
+        if self.port_latitude is None or not (-90 <= self.port_latitude <= 90):
             errors.append("Port latitude must be between -90 and 90 degrees")
-
-        if not (-180 <= self.port_longitude <= 180):
+            
+        if self.port_longitude is None or not (-180 <= self.port_longitude <= 180):
             errors.append("Port longitude must be between -180 and 180 degrees")
 
         # Validate port facilities
@@ -213,10 +213,9 @@ class Product(BaseModel):
     __table_args__ = (
         # Products can have same name but different mines (no unique constraint on name alone)
         # Only code needs to be globally unique (handled by unique=True on code column)
+        UniqueConstraint('mine_id', 'name', name='uq_product_mine_name'),
         db.Index('idx_product_mine', 'mine_id'),
-        db.Index('idx_product_code', 'code'),
         db.Index('idx_product_name', 'name'),
-        db.Index('idx_product_mine_name', 'mine_id', 'name'),  # For queries by mine and name
     )
 
     # ---------------------------------------------------------------------
