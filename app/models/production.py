@@ -23,7 +23,7 @@ from sqlalchemy import (
     Text,
     text
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, object_session
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, object_session, Session
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, date, timedelta
 import json
@@ -183,6 +183,106 @@ class Production(BaseModel):
         
         return value
     
+    @property
+    def duration_days(self) -> int:
+        """Calculate duration of contractual year in days."""
+        return (self.end_date_contractual_year - self.start_date_contractual_year).days +1
+
+        
+    def enrolled_partners_count(self) -> int:
+        """Counts enrolled partners without forcing a full load of the relationship."""
+        # se a relação já estiver no estado 'loaded', use len() — é O(1)
+        if 'enrolled_partners' in self.__dict__:
+            return len(self.enrolled_partners)
+
+        sess = object_session(self)
+        if sess is None:
+            # fallback: se não estiver anexado, usar o que houver em memória
+            return len(getattr(self, 'enrolled_partners', []) or [])
+        # consulta leve com COUNT(*)
+        from app.models.production import ProductionPartnerEnrollment  # import local p/ evitar circular
+        return (
+            sess.query(ProductionPartnerEnrollment)
+            .filter(ProductionPartnerEnrollment.production_id == self.id)
+            .count()
+        )
+        
+    def get_enrolled_halco_buyers(self, session: 'Session') -> List['Partner']:
+        """
+        Returns partners enrolled in this production whose entity_type is HALCO.
+        Works with either Partner.entity_type or Partner.entity.entity_type.
+        """
+        from app.models.partner import Partner, PartnerEntity, EntityTypeEnum
+        from app.models.production import ProductionPartnerEnrollment as PPE
+
+        # Tenta o campo direto em Partner; se não existir, join em PartnerEntity
+        if hasattr(Partner, 'entity_type'):
+            q = (
+                session.query(Partner)
+                .join(PPE, PPE.partner_id == Partner.id)
+                .filter(PPE.production_id == self.id,
+                        Partner.entity_type == EntityTypeEnum.HALCO)
+            )
+        else:
+            q = (
+                session.query(Partner)
+                .join(PPE, PPE.partner_id == Partner.id)
+                .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
+                .filter(PPE.production_id == self.id,
+                        PartnerEntity.entity_type == EntityTypeEnum.HALCO)
+            )
+        return q.all()
+    
+    def get_enrolled_offtakers(self, session: 'Session') -> List['Partner']:
+        """
+        Returns partners enrolled in this production whose entity_type is OFFTAKER.
+        """
+        from app.models.partner import Partner, PartnerEntity, EntityTypeEnum
+        from app.models.production import ProductionPartnerEnrollment as PPE
+
+        if hasattr(Partner, 'entity_type'):
+            q = (
+                session.query(Partner)
+                .join(PPE, PPE.partner_id == Partner.id)
+                .filter(PPE.production_id == self.id,
+                        Partner.entity_type == EntityTypeEnum.OFFTAKER)
+            )
+        else:
+            q = (
+                session.query(Partner)
+                .join(PPE, PPE.partner_id == Partner.id)
+                .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
+                .filter(PPE.production_id == self.id,
+                        PartnerEntity.entity_type == EntityTypeEnum.OFFTAKER)
+            )
+        return q.all()
+    
+    @classmethod
+    def get_current_active(cls, session: 'Session', year: Optional[int] = None) -> Optional['Production']:
+        """
+        Returns the ACTIVE production for the given year (defaults to today's year).
+        Enforced by the partial unique index: at most one row can match.
+        """
+        y = year or date.today().year
+        return (
+            session.query(cls)
+            .filter(cls.contractual_year == y, cls.status == ProductionStatus.ACTIVE)
+            .one_or_none()
+        )
+        
+    @classmethod
+    def get_finalized_previous_years(cls, session: 'Session', up_to_year: Optional[int] = None) -> List['Production']:
+        """
+        Returns COMPLETED productions for years strictly less than up_to_year (defaults to today.year).
+        """
+        cutoff = up_to_year or date.today().year
+        return (
+            session.query(cls)
+            .filter(cls.contractual_year < cutoff, cls.status == ProductionStatus.COMPLETED)
+            .order_by(cls.contractual_year.desc(), cls.scenario_name.asc(), cls.version.desc())
+            .all()
+        )
+        
 class ProductionPartnerEnrollment(BaseModel):
     """Association model for production partner enrollment with vessel sizes and tonnage."""
     
@@ -262,7 +362,7 @@ class ProductionPartnerEnrollment(BaseModel):
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    production: Mapped[List['Production']] = relationship(
+    production: Mapped['Production'] = relationship(
         'Production',
         back_populates='enrolled_partners',
         passive_deletes=True
@@ -299,3 +399,4 @@ class ProductionPartnerEnrollment(BaseModel):
         
     def __repr__(self) -> str:
         return f'<PPE id={self.id} prod={self.production_id} partner={self.partner_id} lot={self.vessel_size_t}>'
+
