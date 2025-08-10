@@ -23,7 +23,7 @@ from sqlalchemy import (
     Text,
     text
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates, object_session
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, date, timedelta
 import json
@@ -97,7 +97,7 @@ class Production(BaseModel):
         SQLEnum(ProductionStatus, name='production_status', native_enum=True, create_constraint=True, validate_strings=True),
         nullable=False,
         default=ProductionStatus.DRAFT,
-        server_default=text('draft'),
+        server_default=text("draft"),
         comment='Scenario Status'
     )
     
@@ -111,7 +111,7 @@ class Production(BaseModel):
     version: Mapped[int] = mapped_column(
         Integer,
         default=1,
-        server_default=text('1'),
+        server_default=text("1"),
         nullable=False
     )
     
@@ -147,6 +147,7 @@ class Production(BaseModel):
     __table_args__ = (
         Index('idx_production_contractual_year', 'contractual_year'),
         Index('idx_production_year_status', 'contractual_year', 'status'),
+        Index('uq_one_active_per_year', "contractual_year", unique=True, sqlite_where=(status == ProductionStatus.ACTIVE)),
         UniqueConstraint('contractual_year', 'scenario_name', 'version', name='uq_prod_year_name_version'),
         CheckConstraint('contractual_year BETWEEN 2000 AND 2100', name='check_contractual_year_range'),
         CheckConstraint('total_planned_tonnage > 0', name='check_total_planned_tonnage_positive'),
@@ -157,9 +158,30 @@ class Production(BaseModel):
     def __repr__(self) -> str:
         return f'<Production "{self.scenario_name}" - {self.contractual_year} ({self.status.value})>'
     
-    @property
-    def is_active(self) -> bool:
-        return self.status == ProductionStatus.ACTIVE
+    @validates("status")
+    def _validate_single_active_per_year(self, key, value):
+        """Checks when it is active"""
+        if value == ProductionStatus.ACTIVE:
+            sess = object_session(self)
+            if sess is None:
+                return value
+            
+            q = (
+                sess.query(type(self))
+                .filter(
+                    type(self).contractual_year == self.contractual_year,
+                    type(self).status == ProductionStatus.ACTIVE
+                )
+            )
+            if self.id is not None:
+                q = q.filter(type(self).id != self.id)
+                
+            if sess.query(q.exists()).scalar():
+                raise ValueError(
+                    f"There is already an ACTIVE scenario for the year {self.contractual_year}."
+                )
+        
+        return value
     
 class ProductionPartnerEnrollment(BaseModel):
     """Association model for production partner enrollment with vessel sizes and tonnage."""
@@ -221,28 +243,28 @@ class ProductionPartnerEnrollment(BaseModel):
     # ---------------------------------------------------------------------
     calculated_vld_count: Mapped[int] = mapped_column(
         Integer,
-        server_default=text('0'),
+        server_default=text("0"),
         nullable=False
     )
     
     calculated_vld_total_tonnage: Mapped[int] = mapped_column(
         Integer,
-        server_default=text('0'),
+        server_default=text("0"),
         nullable=False
     )
     
     vld_tonnage_variance: Mapped[int] = mapped_column(
         Integer,
-        server_default=text('0'),
+        server_default=text("0"),
         nullable=False
     )
     
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    production: Mapped[List['ProductionPartnerEnrollment']] = relationship(
+    production: Mapped[List['Production']] = relationship(
+        'Production',
         back_populates='enrolled_partners',
-        single_parent=True,
         passive_deletes=True
     )
     
