@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from app.extensions import db
 from app.lib import BaseModel
 from typing import Optional, Dict, Any, List
 import sqlalchemy as sa
@@ -101,6 +100,16 @@ class PartnerEntity(BaseModel):
     def __repr__(self) -> str:
         buyer_type = "Halco Buyer" if self.is_halco_buyer else "Offtaker"
         return f'<PartnerEntity {self.name} ({buyer_type})>'
+    
+    @classmethod
+    def get_halco_buyers(cls):
+        """Get all Halco buyers entities."""
+        return cls.query.filter_by(is_halco_buyer=True).all()
+    
+    @classmethod
+    def get_offtakers(cls):
+        """Get all offtakers entities."""
+        return cls.query.filter_by(is_halco_buyer=False).all()
     
     def to_dict(self, include_partners: bool = False, include_audit: bool = True) -> Dict[str, Any]:
         """Convert to dictionary with optional partner inclusion."""
@@ -205,6 +214,11 @@ class Partner(BaseModel):
     def __repr__(self) -> str:
         entity_name = getattr(self.entity, "name", None)
         return f'<Partner {self.name} (Entity: {entity_name})>'
+    
+    @property
+    def is_halco_buyer(self):
+        """Check if partner belongs to Halco buyer entity."""
+        return self.entity.is_halco_buyer if self.entity else False
     
     def to_dict(self, include_entity: bool = True, include_audit: bool = True) -> Dict[str, Any]:
         """Convert to dictionary with optional entity details."""
