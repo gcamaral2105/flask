@@ -3,7 +3,6 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 
-from app.extensions import db
 from app.lib import BaseModel
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -94,11 +93,19 @@ class Mine(BaseModel):
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    products = relationship(
+    products: Mapped['Product'] = relationship(
         "Product",
         back_populates="mine",
         cascade="all, delete-orphan",
         lazy="selectin"
+    )
+    
+    berths: Mapped['Berth'] = relationship(
+        'Berth',
+        back_populates="mine",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="Berth.priority"
     )
 
     # ---------------------------------------------------------------------
@@ -122,7 +129,15 @@ class Mine(BaseModel):
         If mine does not have a code, it will be the same as the name.
         """
         return self.code if self.code else self.name
-
+    
+    def berths_count(self) -> str:
+        """Returns the amount of real berths registered."""
+        return len(self.berths)
+    
+    def sync_port_berths_from_berths(self) -> None:
+        self.port_berths = self.berths_count()
+        
+        
     # ---------------------------------------------------------------------
     # Validation and serialization
     # ---------------------------------------------------------------------
@@ -272,4 +287,5 @@ Mine.products_count = column_property(
     .correlate_except(Product)
     .scalar_subquery()
 )
+
 
