@@ -18,7 +18,7 @@ class MaintenanceStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
-class MaintenaceWindow(BaseModel):
+class MaintenanceWindow(BaseModel):
     __tablename__ = 'lineup_maintenance_windows'
     __mapper_args__ = {'eager_defaults': True}
 
