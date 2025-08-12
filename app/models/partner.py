@@ -69,12 +69,6 @@ class PartnerEntity(BaseModel):
         passive_deletes=True
     )
     
-    enrollments: Mapped[List['ProductionPartnerEnrollment']] = relationship(
-        'ProductionPartnerEnrollment',
-        back_populates='partner',
-        passive_deletes=True
-    )
-    
     # ---------------------------------------------------------------------
     # Table constraints and indexes
     # ---------------------------------------------------------------------
@@ -182,6 +176,12 @@ class Partner(BaseModel):
     # ---------------------------------------------------------------------
 
     entity = relationship('PartnerEntity', back_populates='partners', lazy='selectin')
+
+    enrollments: Mapped[List['ProductionPartnerEnrollment']] = relationship(
+        'ProductionPartnerEnrollment',
+        back_populates='partner',
+        passive_deletes=True
+    )
 
     lineups: Mapped[List["Lineup"]] = relationship(
         "Lineup",
