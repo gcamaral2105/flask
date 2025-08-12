@@ -27,6 +27,7 @@ class Vessel(BaseModel):
     """Vessels owned or nominated by Alcoa"""
 
     __tablename__ = 'vessels'
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -85,11 +86,32 @@ class Vessel(BaseModel):
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    partner: Mapped["Partner"] = relationship(
-        "Partner"
+    shuttle: Mapped[List["Shuttle"]] = relationship(
+        "Shuttle",
+        back_populates="vessel",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True
     )
 
     lineups: Mapped["Lineup"] = relationship(
         "Lineup",
         back_populates="vessel"
+    )
+
+    def to_dict(self, include_audit: bool = False) -> Dict [str, Any]:
+        d = super().to_dict(include_audit=include_audit)
+        d.update({
+            "name": self.name,
+            "imo": self.imo,
+            "type": self.type.value if self.type else None,
+            "status": self.status.value if self.status else None,
+            "dwt": self.dwt,
+            "loa": self.loa,
+            "beam": self.beam,
+        })
+        return d
+        back_populates="vessel"
+
     )
