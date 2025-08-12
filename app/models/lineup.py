@@ -144,7 +144,7 @@ class Lineup(BaseModel):
         lazy="selectin"
     )
 
-    product: Mappe["Product"] = relationship(
+    product: Mapped["Product"] = relationship(
         "Product",
         back_populates="lineups",
         lazy="selectin"
