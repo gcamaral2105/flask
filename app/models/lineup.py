@@ -6,7 +6,7 @@ from sqlalchemy import (
     Index, CheckConstraint, UniqueConstraint, ForeignKey,
     Integer, String, DateTime, Enum as SQLEnum, text, inspect
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.ext.associationproxy import association_proxy
 from app.lib import BaseModel
 
@@ -67,6 +67,12 @@ class Lineup(BaseModel):
         ForeignKey("berths.id", ondelete="RESTRICT"),
         nullable=False,
         index=True
+    )
+
+    vessel_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("vessel.id", ondelete="SET NULL"),
+        nullable=True
     )
 
     # ---------------------------------------------------------------------
@@ -156,6 +162,12 @@ class Lineup(BaseModel):
         lazy="selectin"
     )
 
+    vessel: Mapped[Optional["Vessel"]] = relationship(
+        "Vessel",
+        back_populates="lineups",
+        lazy="selectin"
+    )
+
     # ---------------------------------------------------------------------
     # Association Proxy
     # ---------------------------------------------------------------------
@@ -177,6 +189,12 @@ class Lineup(BaseModel):
         Index("idx_lineup_vld_dates", "vld_id", "etb", "loading_start"),
         Index("idx_lineup_berth_window", "berth_id", "etb", "atb")
     )
+
+    @validates("vessel_id")
+    def _sync_vessel_name(self, key, value):
+        if value and self.vessel:
+            self.vessel_name = self.vessel_name
+        return value
 
     def __repr__(self) -> str:
         return f"<Lineup {self.vessel_name} - {self.partner} - {self.vld}>"
@@ -308,4 +326,5 @@ class Lineup(BaseModel):
                 result["consistency_flags"] = consistency
 
             return result
+
 
