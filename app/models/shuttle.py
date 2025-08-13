@@ -243,8 +243,10 @@ class ShuttleOperation(BaseModel):
 
     loading_lineup: Mapped[Optional["Lineup"]] = relationship(
         "Lineup",
+        back_populates="cycles",
         lazy="selectin"
     )
+
 
     cape_vessel: Mapped[Optional["Vessel"]] = relationship(
         "Vessel",
@@ -295,3 +297,4 @@ class ShuttleOperation(BaseModel):
         if self.is_sublet and self.sublet_vld_id:
             return self.sublet_vld_id
         return self.loading_vld_id or getattr(self.loading_lineup, "vld_id", None)
+
