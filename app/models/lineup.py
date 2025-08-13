@@ -168,6 +168,13 @@ class Lineup(BaseModel):
         lazy="selectin"
     )
 
+    cycles: Mapped[List["ShuttleOperation"]] = relationship(
+        "ShuttleOperation",
+        back_populates="loading_lineup",
+        lazy="selectin",
+        passive_deletes=True
+    )
+
     # ---------------------------------------------------------------------
     # Association Proxy
     # ---------------------------------------------------------------------
@@ -326,5 +333,3 @@ class Lineup(BaseModel):
                 result["consistency_flags"] = consistency
 
             return result
-
-
