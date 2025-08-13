@@ -258,6 +258,7 @@ class ShuttleOperation(BaseModel):
 
     loading_vld: Mapped[Optional["VLD"]] = relationship(
         "VLD",
+        foreign_keys=[loading_vld_id],
         lazy="selectin"
     )
 
@@ -293,4 +294,5 @@ class ShuttleOperation(BaseModel):
         if self.is_sublet and self.sublet_vld_id:
             return self.sublet_vld_id
         return self.loading_vld_id or getattr(self.loading_lineup, "vld_id", None)
+
 
