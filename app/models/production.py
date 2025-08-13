@@ -133,13 +133,18 @@ class Production(BaseModel):
     # Relationships
     # ---------------------------------------------------------------------
     enrolled_partners: Mapped[List['ProductionPartnerEnrollment']] = relationship(
+        'ProductionPartnerEnrollment',
         back_populates='production', 
         cascade='all, delete-orphan', 
         single_parent=True, 
-        passive_deletes=True
+        passive_deletes=True,
+        lazy="selectin"
     )
     
-    base_scenario: Mapped[Optional['Production']] = relationship('Production', remote_side='Production.id', backref='derived_scenarios')
+    base_scenario: Mapped[Optional['Production']] = relationship(
+        'Production', 
+        remote_side='Production.id', 
+        backref='derived_scenarios')
     
     # ---------------------------------------------------------------------
     # Index and Constraints
@@ -378,7 +383,6 @@ class ProductionPartnerEnrollment(BaseModel):
     vlds: Mapped[List['VLD']] = relationship(
         'VLD',
         back_populates='production',
-        cascade='RESTRICT',
         passive_delete=True
     )
     
