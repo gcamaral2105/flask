@@ -8,6 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from app.lib import BaseModel
+from app.models.vessel import VesselType
 
 class ShuttleStatus(str, Enum):
     ACTIVE = "active"
@@ -90,12 +91,12 @@ class Shuttle(BaseModel):
     )
 
     def __repr__(self) -> str:
-        return f"<Shuttle {self.name!r} vessel={self.vessel_id}>"
+        return f"<Shuttle {self.vessel.name!r} vessel={self.vessel_id}>"
 
     @validates("vessel")
     def _ensure_vessel_type(self, key, value):
-        if value and getattr(value, "vtype", None) != getattr(type(value).vtype, "SHUTTLE", None):
-            pass
+        if value and getattr(value, "vtype", None) != VesselType.SHUTTLE:
+            raise ValueError("Assigned vessel must be of type shuttle.")
         return value
     
 
@@ -294,5 +295,3 @@ class ShuttleOperation(BaseModel):
         if self.is_sublet and self.sublet_vld_id:
             return self.sublet_vld_id
         return self.loading_vld_id or getattr(self.loading_lineup, "vld_id", None)
-
-
