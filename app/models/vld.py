@@ -250,7 +250,9 @@ class VLD(BaseModel):
     # Relationships
     # ---------------------------------------------------------------------
     production: Mapped['Production'] = relationship(
-        'Production'
+        'Production',
+        back_populates='vlds',
+        lazy='selectin'
     )
     
     original_partner: Mapped['Partner'] = relationship(
@@ -284,7 +286,6 @@ class VLD(BaseModel):
     lineups: Mapped[List["Lineup"]] = relationship(
         "Lineup",
         back_populates="vld",
-        cascade="all, delete-orphan",
         passive_deletes=True,
         lazy="selectin"
     )
