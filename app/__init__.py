@@ -1,5 +1,6 @@
 from flask import Flask
 from .extensions import db, migrate
+import app.models
 
 from .main import main_bp
 
@@ -15,4 +16,5 @@ def create_app(config_class='config.Config'):
 
         app.register_blueprint(main_bp, url_prefix="/")
         
+
     return app
