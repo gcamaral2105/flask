@@ -86,7 +86,6 @@ class Berth(BaseModel):
     __table_args__ = (
         UniqueConstraint('mine_id', 'name', name='uq_berth_mine_name'),
         CheckConstraint('priority > 0', name='check_berth_priority_nonneg'),
-        CheckConstraint()
     )
     
     def __repr__(self) -> str:
@@ -100,4 +99,5 @@ class Berth(BaseModel):
                 "name": self.mine.name,
                 "code": self.mine.code,
             }
+
         return data
