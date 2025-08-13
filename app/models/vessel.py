@@ -120,7 +120,7 @@ class Vessel(BaseModel):
     def __repr__(self) -> str:
         return f"<Vessel {self.name!r}>"
 
-    def to_dict(self, include_audit: bool = False) -> Dict [str, Any]:
+    def to_dict(self, include_audit: bool = False) -> Dict[str, Any]:
         d = super().to_dict(include_audit=include_audit)
         d.update({
             "name": self.name,
@@ -132,5 +132,6 @@ class Vessel(BaseModel):
             "beam": self.beam,
         })
         return d
+
 
 
