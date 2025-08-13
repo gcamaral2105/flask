@@ -93,28 +93,20 @@ class Mine(BaseModel):
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    products: Mapped['Product'] = relationship(
+    products: Mapped[List['Product']] = relationship(
         "Product",
         back_populates="mine",
         cascade="all, delete-orphan",
         lazy="selectin"
     )
     
-    berths: Mapped['Berth'] = relationship(
+    berths: Mapped[List['Berth']] = relationship(
         'Berth',
         back_populates="mine",
         cascade="all, delete-orphan",
         lazy="selectin",
         order_by="Berth.priority"
-    )
-
-    lineups: Mapped[List["Lineup"]] = relationship(
-        "Lineup",
-        back_populates="product",
-        passive_deletes=True,
-        lazy="selectin"
-    )
-    
+    )    
 
     # ---------------------------------------------------------------------
     # Table-level constraints and indexes
@@ -241,7 +233,18 @@ class Product(BaseModel):
         comment="Mine related to the product"
     )
 
-    mine = relationship("Mine", back_populates="products")
+    lineups: Mapped[List["Lineup"]] = relationship(
+        "Lineup",
+        back_populates="product",
+        passive_deletes=True,
+        lazy="selectin"
+    )
+
+    mine = relationship(
+        "Mine", 
+        back_populates="products",
+        lazy="selectin"    
+    )
 
     # ---------------------------------------------------------------------
     # Table-level constraints and indexes
