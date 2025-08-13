@@ -299,7 +299,5 @@ Mine.products_count = column_property(
     .correlate_except(Product)
     .scalar_subquery()
 )
-        
-    def __repr__(self) -> str:
-        return f'<PPE id={self.id} prod={self.production_id} partner={self.partner_id} lot={self.vessel_size_t}>'
+
 
