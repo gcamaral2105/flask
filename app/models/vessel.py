@@ -84,9 +84,25 @@ class Vessel(BaseModel):
     )
 
     # ---------------------------------------------------------------------
+    # Foreign Keys
+    # ---------------------------------------------------------------------
+    owner_partner_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("partners.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
+    # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
-    shuttle: Mapped[List["Shuttle"]] = relationship(
+    owner_partner: Mapped[Optional["Partner"]] = relationship(
+        "Partner",
+        back_populates="vessels",
+        lazy="selectin"
+    )
+    
+    shuttle: Mapped["Shuttle"] = relationship(
         "Shuttle",
         back_populates="vessel",
         uselist=False,
@@ -95,10 +111,14 @@ class Vessel(BaseModel):
         passive_deletes=True
     )
 
-    lineups: Mapped["Lineup"] = relationship(
+    lineups: Mapped[List["Lineup"]] = relationship(
         "Lineup",
-        back_populates="vessel"
+        back_populates="vessel",
+        lazy="selectin"
     )
+
+    def __repr__(self) -> str:
+        return f"<Vessel {self.name!r}>"
 
     def to_dict(self, include_audit: bool = False) -> Dict [str, Any]:
         d = super().to_dict(include_audit=include_audit)
