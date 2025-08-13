@@ -71,7 +71,7 @@ class Lineup(BaseModel):
 
     vessel_id: Mapped[Optional[int]] = mapped_column(
         Integer,
-        ForeignKey("vessel.id", ondelete="SET NULL"),
+        ForeignKey("vessels.id", ondelete="SET NULL"),
         nullable=True
     )
 
