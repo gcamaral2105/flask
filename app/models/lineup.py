@@ -264,9 +264,9 @@ class Lineup(BaseModel):
                 {"event": "ata", "at": _dt(self.ata)},
                 {"event": "nor_tendered", "at": _dt(self.nor_time)},
                 {"event": "etb", "at": _dt(self.etb)},
-                {"event": "atb", "at": _dt(self.ata)},
+                {"event": "atb", "at": _dt(self.atb)},
                 {"event": "loading_start", "at": _dt(self.loading_start)},
-                {"event": "loadin_completion", "at": _dt(self.loading_completion)},
+                {"event": "loading_completion", "at": _dt(self.loading_completion)},
                 {"event": "ets", "at": _dt(self.ets)},
                 {"event": "ats", "at": _dt(self.ats)},
             ]
@@ -326,4 +326,5 @@ class Lineup(BaseModel):
                 result["consistency_flags"] = consistency
 
             return result
+
 
