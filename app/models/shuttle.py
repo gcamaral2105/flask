@@ -73,6 +73,14 @@ class Shuttle(BaseModel):
         lazy="selectin"
     )
 
+    cycles: Mapped[List["ShuttleOperation"]] = relationship(
+        "ShuttleOperation",
+        back_populates="shuttle",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin"
+    )
+
     # ---------------------------------------------------------------------
     # Indexes and Constraints
     # ---------------------------------------------------------------------
@@ -80,6 +88,9 @@ class Shuttle(BaseModel):
         CheckConstraint("target_discharge_rate_tph IS NULL OR target_discharge_rate_tph > 0", name="check_shuttle_discharge_rate"),
         CheckConstraint("target_loading_rate_tph IS NULL OR target_loading_rate_tph > 0", name="check_shuttle_loading_rate"),
     )
+
+    def __repr__(self) -> str:
+        return f"<Shuttle {self.name!r} vessel={self.vessel_id}>"
 
     @validates("vessel")
     def _ensure_vessel_type(self, key, value):
@@ -245,7 +256,7 @@ class ShuttleOperation(BaseModel):
         lazy="selectin"
     )
 
-    loading_vld_id: Mapped[Optional["VLD"]] = relationship(
+    loading_vld: Mapped[Optional["VLD"]] = relationship(
         "VLD",
         lazy="selectin"
     )
