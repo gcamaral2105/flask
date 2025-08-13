@@ -316,7 +316,7 @@ class Lineup(BaseModel):
                 }
 
             # Business Consistency Flags
-            consistency = []
+            consistency = {}
             try:
                 if self.product and self.berth and self.product.mine_id != self.berth.mine_id:
                     consistency["mine_mismatch"] = True
@@ -326,3 +326,4 @@ class Lineup(BaseModel):
                 result["consistency_flags"] = consistency
 
             return result
+
