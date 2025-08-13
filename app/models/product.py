@@ -99,14 +99,6 @@ class Mine(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
-    
-    berths: Mapped[List['Berth']] = relationship(
-        'Berth',
-        back_populates="mine",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        order_by="Berth.priority"
-    )    
 
     # ---------------------------------------------------------------------
     # Table-level constraints and indexes
@@ -299,3 +291,4 @@ Mine.products_count = column_property(
     .correlate_except(Product)
     .scalar_subquery()
 )
+
