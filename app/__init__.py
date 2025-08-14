@@ -33,4 +33,3 @@ def create_app(config_class='config.Config'):
         
 
     return app
-
