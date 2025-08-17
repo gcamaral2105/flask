@@ -9,7 +9,9 @@ All application models should inherit from this base class to
 ensure consistent audit trail across the system.
 """
 
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
+from enum import Enum as PyEnum
 from typing import Dict, Any, Optional
 from app.extensions import db
 
@@ -83,23 +85,22 @@ class BaseModel(db.Model):
             Dictionary representation of the model
         """
         result = {}
+        audit = {'created_at','updated_at','created_by','updated_by','deleted_at','deleted_by'}
         
         # Get all columns except audit fields initially
         for column in self.__table__.columns:
-            if not include_audit and column.name in {
-                'created_at', 'updated_at', 'created_by', 
-                'updated_by', 'deleted_at', 'deleted_by'
-            }:
+            if not include_audit and column.name in audit:
                 continue
-                
             value = getattr(self, column.name)
             
-            # Handle datetime serialization
-            if isinstance(value, datetime):
+            if isinstance(value, (datetime, date)):
                 result[column.name] = value.isoformat()
+            elif isinstance(value, Decimal):
+                result[column.name] = str(value)
+            elif isinstance(value, PyEnum):
+                result[column.name] = value.value
             else:
                 result[column.name] = value
-                
         return result
     
     def is_deleted(self) -> bool:
@@ -143,4 +144,5 @@ class BaseModel(db.Model):
     
     def __repr__(self) -> str:
         """Default string representation showing ID and creation time."""
+
         return f"<{self.__class__.__name__} id={getattr(self, 'id', 'None')} created_at={self.created_at}>"
