@@ -181,6 +181,23 @@ class VLD(BaseModel):
     )
     
     # ---------------------------------------------------------------------
+    # Carry-over
+    # ---------------------------------------------------------------------
+    is_carry_over: Mapped[bool] = mapped_column(
+    Boolean,
+    nullable=False,
+    default=False,
+    server_default=sql.false(),
+    comment="True quando o VLD é usado por outro parceiro sem mudar a propriedade"
+    )
+
+    carry_over_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Justificativa/observação do carry-over"
+    )
+    
+    # ---------------------------------------------------------------------
     # Cancellation Management
     # ---------------------------------------------------------------------
     cancellation_reason: Mapped[Optional[str]] = mapped_column(
@@ -246,6 +263,14 @@ class VLD(BaseModel):
         index=True
     )
     
+    carried_by_partner_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey('partners.id', ondelete='RESTRICT'),
+        nullable=True,
+        index=True,
+        comment="Parceiro que utiliza o VLD (sem alteração de propriedade)"
+    )
+    
     # ---------------------------------------------------------------------
     # Relationships
     # ---------------------------------------------------------------------
@@ -263,6 +288,11 @@ class VLD(BaseModel):
     current_partner: Mapped['Partner'] = relationship(
         'Partner',
         foreign_keys=[current_partner_id]
+    )
+    
+    carried_by_partner: Mapped['Partner'] = relationship(
+        'Partner',
+        foreign_keys=[carried_by_partner_id]
     )
     
     reassignment_history: Mapped[List['VLDReassignmentHistory']] = relationship(
@@ -309,6 +339,9 @@ class VLD(BaseModel):
         CheckConstraint('(layday_start IS NULL) OR (layday_end IS NULL) OR (layday_start <= layday_end)', name='check_layday_range'),
         CheckConstraint('(narrow_period_start IS NULL) OR (narrow_period_end IS NULL) OR (narrow_period_start <= narrow_period_end)', name='check_narrow_range'),
         CheckConstraint("(narrow_exception_ok = 0) OR (narrow_exception_reason IS NOT NULL AND LENGTH(TRIM(narrow_exception_reason)) > 0)", name="check_narrow_exception_reason_when_ok"),
+        CheckConstraint("(is_carry_over = 0 AND carried_by_partner_id IS NULL) OR (is_carry_over = 1 AND carried_by_partner_id IS NOT NULL)", name="check_carry_over_partner_presence"),
+        CheckConstraint("carried_by_partner_id IS NULL OR carried_by_partner_id <> original_partner_id", name="check_carry_over_not_same_as_owner"),
+        CheckConstraint("(is_carry_over = 0) OR (current_partner_id = original_partner_id)", name="check_carry_over_keeps_ownership"),
     )
     
     def __repr__(self):
@@ -413,6 +446,20 @@ class VLD(BaseModel):
 
         return value
     
+    def mark_carry_over(self, using_partner_id: int, *, reason: Optional[str] = None) -> None:
+        if using_partner_id == self.original_partner_id:
+            raise ValueError("Carry-over precisa ser para parceiro diferente do dono.")
+        # Propriedade permanece com o dono
+        self.current_partner_id = self.original_partner_id
+        self.is_carry_over = True
+        self.carried_by_partner_id = using_partner_id
+        self.carry_over_reason = reason
+
+    def clear_carry_over(self) -> None:
+        self.is_carry_over = False
+        self.carried_by_partner_id = None
+        self.carry_over_reason = None
+
     def apply_deferral(self, new_date: date, reason: Optional[str] = None):
         if new_date <= self.vld_date:
             raise ValueError("New VLD date must be after current vld_date.")
