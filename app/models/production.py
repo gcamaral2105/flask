@@ -418,4 +418,19 @@ class ProductionPartnerEnrollment(BaseModel):
         return f'<PPE id={self.id} prod={self.production_id} partner={self.partner_id} lot={self.vessel_size_t}>'
 
 
+    def to_dict(self) -> dict:
+        data = super().to_dict(exclude=["partner", "production"])
+
+        data["partner_name"] = self.partner.name if self.partner else None
+        data["production_scenario_name"] = (
+            self.production.scenario_name if self.production else None
+        )
+        data["production_contractual_year"] = (
+            self.production.contractual_year if self.production else None
+        )
+
+        return data
+
+
+
 
