@@ -146,6 +146,13 @@ class Production(BaseModel):
         remote_side='Production.id', 
         backref='derived_scenarios')
     
+    vlds: Mapped[List['VLD']] = relationship(
+        'VLD',
+        back_populates='production',
+        passive_deletes=True,
+        lazy="selectin"
+    )
+    
     # ---------------------------------------------------------------------
     # Index and Constraints
     # ---------------------------------------------------------------------
@@ -217,50 +224,29 @@ class Production(BaseModel):
         Returns partners enrolled in this production whose entity_type is HALCO.
         Works with either Partner.entity_type or Partner.entity.entity_type.
         """
-        from app.models.partner import Partner, PartnerEntity, EntityTypeEnum
+        from app.models.partner import Partner, PartnerEntity
         from app.models.production import ProductionPartnerEnrollment as PPE
 
-        # Tenta o campo direto em Partner; se não existir, join em PartnerEntity
-        if hasattr(Partner, 'entity_type'):
-            q = (
-                session.query(Partner)
-                .join(PPE, PPE.partner_id == Partner.id)
-                .filter(PPE.production_id == self.id,
-                        Partner.entity_type == EntityTypeEnum.HALCO)
-            )
-        else:
-            q = (
-                session.query(Partner)
-                .join(PPE, PPE.partner_id == Partner.id)
-                .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
-                .filter(PPE.production_id == self.id,
-                        PartnerEntity.entity_type == EntityTypeEnum.HALCO)
-            )
-        return q.all()
+        return (
+            session.query(Partner)
+            .join(PPE, PPE.partner_id == Partner.id)
+            .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
+            .filter(PPE.production_id == self.id, PartnerEntity.is_halco_buyer.is_(True))
+        ).all()
     
     def get_enrolled_offtakers(self, session: 'Session') -> List['Partner']:
         """
         Returns partners enrolled in this production whose entity_type is OFFTAKER.
         """
-        from app.models.partner import Partner, PartnerEntity, EntityTypeEnum
+        from app.models.partner import Partner, PartnerEntity
         from app.models.production import ProductionPartnerEnrollment as PPE
 
-        if hasattr(Partner, 'entity_type'):
-            q = (
-                session.query(Partner)
-                .join(PPE, PPE.partner_id == Partner.id)
-                .filter(PPE.production_id == self.id,
-                        Partner.entity_type == EntityTypeEnum.OFFTAKER)
-            )
-        else:
-            q = (
-                session.query(Partner)
-                .join(PPE, PPE.partner_id == Partner.id)
-                .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
-                .filter(PPE.production_id == self.id,
-                        PartnerEntity.entity_type == EntityTypeEnum.OFFTAKER)
-            )
-        return q.all()
+        return (
+            session.query(Partner)
+            .join(PPE, PPE.partner_id == Partner.id)
+            .join(PartnerEntity, Partner.entity_id == PartnerEntity.id)
+            .filter(PPE.production_id == self.id, PartnerEntity.is_halco_buyer.is_(False))
+        ).all()
     
     @classmethod
     def get_current_active(cls, session: 'Session', year: Optional[int] = None) -> Optional['Production']:
@@ -287,6 +273,30 @@ class Production(BaseModel):
             .order_by(cls.contractual_year.desc(), cls.scenario_name.asc(), cls.version.desc())
             .all()
         )
+    
+    def to_dict(self) -> dict:
+        data = super().to_dict(exclude=["enrolled_partners"])
+
+        data["year_range_str"] = f"{self.start_date_contractual_year.year} - {self.end_date_contractual_year.year}"
+        data["status_label"] = self.status.capitalize() if self.status else None
+        data["duration_days"] = (
+            (self.end_date_contractual_year - self.start_date_contractual_year).days
+            if self.start_date_contractual_year and self.end_date_contractual_year
+            else None
+        )
+        data["is_active"] = self.status == "active"
+
+        data["partners"] = [
+            {
+                "partner_id": p.partner_id,
+                "partner_name": p.partner.name if p.partner else None,
+                "planned_tonnage": p.planned_tonnage,
+                "actual_tonnage": p.actual_tonnage
+            }
+            for p in self.enrolled_partners
+        ]
+
+        return data
         
 class ProductionPartnerEnrollment(BaseModel):
     """Association model for production partner enrollment with vessel sizes and tonnage."""
@@ -380,13 +390,6 @@ class ProductionPartnerEnrollment(BaseModel):
         back_populates='enrollments'
     )
     
-    vlds: Mapped[List['VLD']] = relationship(
-        'VLD',
-        back_populates='production',
-        passive_deletes=True,
-        lazy="selectin"
-    )
-    
     # ---------------------------------------------------------------------
     # Indexes and Constraints
     # ---------------------------------------------------------------------
@@ -413,5 +416,6 @@ class ProductionPartnerEnrollment(BaseModel):
         
     def __repr__(self) -> str:
         return f'<PPE id={self.id} prod={self.production_id} partner={self.partner_id} lot={self.vessel_size_t}>'
+
 
 
