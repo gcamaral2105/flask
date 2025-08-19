@@ -639,3 +639,4 @@ class VLDDeferralHistory(BaseModel):
     __table_args__ = (
         Index('idx_vld_deferral_vld_id', 'vld_id'),
     )
+
