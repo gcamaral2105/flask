@@ -274,28 +274,57 @@ class Production(BaseModel):
             .all()
         )
     
-    def to_dict(self) -> dict:
-        data = super().to_dict(exclude=["enrolled_partners"])
-
-        data["year_range_str"] = f"{self.start_date_contractual_year.year} - {self.end_date_contractual_year.year}"
-        data["status_label"] = self.status.capitalize() if self.status else None
-        data["duration_days"] = (
-            (self.end_date_contractual_year - self.start_date_contractual_year).days
-            if self.start_date_contractual_year and self.end_date_contractual_year
-            else None
-        )
-        data["is_active"] = self.status == "active"
-
-        data["partners"] = [
-            {
-                "partner_id": p.partner_id,
-                "partner_name": p.partner.name if p.partner else None,
-                "planned_tonnage": p.planned_tonnage,
-                "actual_tonnage": p.actual_tonnage
-            }
-            for p in self.enrolled_partners
-        ]
-
+    def to_dict(self, deep: bool = False, include: set | None = None, exclude: set | None = None) -> dict:
+        include = set(include or [])
+        exclude = set(exclude or [])
+    
+        def ref(obj, label: str = "name"):
+            if obj is None:
+                return None
+            return {"id": getattr(obj, "id", None), label: getattr(obj, label, None)}
+    
+        data = super().to_dict(include=include, exclude=exclude)
+    
+        data.update({
+            "status": getattr(self, "status", None).value if getattr(self, "status", None) else None,
+            "period_start": getattr(self, "period_start", None),
+            "period_end": getattr(self, "period_end", None),
+            "mine": ref(getattr(self, "mine", None)),
+        })
+    
+        enrollments = list(getattr(self, "enrolled_partners", []) or [])
+    
+        # Helper to compute planned_tonnage consistently with PPE.to_dict
+        def planned_tonnage_for(e) -> int:
+            incentive = e.manual_incentive_tonnage if e.manual_incentive_tonnage is not None else (e.calculated_incentive_tonnage or 0)
+            return e.adjusted_tonnage if e.adjusted_tonnage is not None else (e.minimum_tonnage + incentive)
+    
+        total_planned = sum(planned_tonnage_for(e) for e in enrollments)
+        total_actual = sum((e.calculated_vld_total_tonnage or 0) for e in enrollments)
+        total_variance = sum((e.vld_tonnage_variance or ( (e.calculated_vld_total_tonnage or 0) - planned_tonnage_for(e) )) for e in enrollments)
+    
+        data["enrollment_summary"] = {
+            "partners_count": len(enrollments),
+            "total_planned_tonnage": total_planned,
+            "total_actual_vld_tonnage": total_actual,
+            "total_vld_variance": total_variance,
+        }
+    
+        need_enrollments = deep or ("enrolled_partners" in include)
+        if need_enrollments:
+            # Expand each enrollment (and include vld_count from the model)
+            expanded = []
+            for e in enrollments:
+                ed = e.to_dict(deep=False, include={"partner"})
+                # Ensure share calculated against planned total (avoid division by zero)
+                planned = ed.get("planned_tonnage", planned_tonnage_for(e))
+                share = float(planned / total_planned) if total_planned else 0.0
+                ed["share"] = share
+                # vld_count is already in ed via PPE.to_dict, but guarantee presence
+                ed["vld_count"] = ed.get("vld_count", e.calculated_vld_count or 0)
+                expanded.append(ed)
+            data["enrolled_partners"] = expanded
+    
         return data
         
 class ProductionPartnerEnrollment(BaseModel):
@@ -418,18 +447,61 @@ class ProductionPartnerEnrollment(BaseModel):
         return f'<PPE id={self.id} prod={self.production_id} partner={self.partner_id} lot={self.vessel_size_t}>'
 
 
-    def to_dict(self) -> dict:
-        data = super().to_dict(exclude=["partner", "production"])
-
-        data["partner_name"] = self.partner.name if self.partner else None
-        data["production_scenario_name"] = (
-            self.production.scenario_name if self.production else None
+    def to_dict(self, deep: bool = False, include: set | None = None, exclude: set | None = None) -> dict:
+        include = set(include or [])
+        exclude = set(exclude or [])
+    
+        def ref(obj, label: str = "name"):
+            if obj is None:
+                return None
+            return {"id": getattr(obj, "id", None), label: getattr(obj, label, None)}
+    
+        data = super().to_dict(include=include, exclude=exclude)
+    
+        # Partner (shallow)
+        if "partner" not in exclude:
+            data["partner"] = ref(getattr(self, "partner", None))
+    
+        # Incentive chosen (manual has priority)
+        incentive = (
+            self.manual_incentive_tonnage
+            if self.manual_incentive_tonnage is not None
+            else (self.calculated_incentive_tonnage or 0)
         )
-        data["production_contractual_year"] = (
-            self.production.contractual_year if self.production else None
+    
+        # Planned tonnage rule
+        planned_tonnage = (
+            self.adjusted_tonnage
+            if self.adjusted_tonnage is not None
+            else (self.minimum_tonnage + incentive)
         )
-
+    
+        # Actuals from VLD aggregates already on the model
+        actual_vld_count = self.calculated_vld_count or 0
+        actual_vld_tonnage = self.calculated_vld_total_tonnage or 0
+    
+        # Variance (use stored field if you keep it updated, else recompute)
+        variance = (
+            self.vld_tonnage_variance
+            if self.vld_tonnage_variance is not None
+            else actual_vld_tonnage - planned_tonnage
+        )
+    
+        data.update({
+            "vessel_size_t": self.vessel_size_t,
+            "minimum_tonnage": self.minimum_tonnage,
+            "adjusted_tonnage": self.adjusted_tonnage,
+            "incentive_tonnage": incentive,
+            "planned_tonnage": planned_tonnage,
+            "vld_count": actual_vld_count,
+            "vld_total_tonnage": actual_vld_tonnage,
+            "vld_tonnage_variance": variance,
+            "production_id": self.production_id,
+            "partner_id": self.partner_id,
+        })
+    
         return data
+
 
 
 
