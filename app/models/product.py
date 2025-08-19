@@ -278,20 +278,47 @@ class Product(BaseModel):
         mine_identifier = mine_label.get_main_identifier() if mine_label else self.mine_id
         return f"<Product {product_identifier!r} (Mine: {mine_identifier})>"
 
-    def to_dict(self, *, include_mine: bool = True, include_audit: bool = True) -> Dict[str, Any]:
-        """Serialize the product to a dictionary."""
-        result = super().to_dict(include_audit=include_audit)
-
-        if include_mine and self.mine:
-            result["mine"] = {
-                "id": self.mine.id,
-                "name": self.mine.name,
-                "code": self.mine.code,
-                "main_identifier": self.mine.get_main_identifier(),
-                "country": self.mine.country
-            }
-
-        return result
+    def to_dict(self, deep: bool = False, include: set | None = None, exclude: set | None = None) -> dict:
+        """
+        Serialize product for API/UI usage.
+        - deep=False: lean (id, code, name, type, mine ref)
+        - deep=True or include 'mine': expand mine shallow
+        """
+        include = set(include or [])
+        exclude = set(exclude or [])
+    
+        def ref(obj, label: str = "name"):
+            if obj is None:
+                return None
+            return {"id": getattr(obj, "id", None), label: getattr(obj, label, None)}
+    
+        data = super().to_dict(include=include, exclude=exclude)
+    
+        # Normalize core fields
+        data.update({
+            "code": getattr(self, "code", None),
+            "name": getattr(self, "name", None),
+            "type": getattr(self, "type", None) if hasattr(self, "type") else None,
+        })
+    
+        # Always provide mine as shallow ref (unless excluded)
+        if "mine" not in exclude:
+            mine = getattr(self, "mine", None)
+            data["mine"] = ref(mine)
+    
+        # Optionally expand related stuff
+        if deep or ("mine" in include):
+            # If you want more mine details in some contexts
+            mine = getattr(self, "mine", None)
+            if mine:
+                data["mine"] = {
+                    "id": mine.id,
+                    "name": getattr(mine, "name", None),
+                    "code": getattr(mine, "code", None),
+                    "country": getattr(mine, "country", None),
+                }
+    
+        return data
     
 Mine.products_count = column_property(
     select(func.count(Product.id))
